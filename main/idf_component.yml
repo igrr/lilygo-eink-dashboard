@@ -1,0 +1,7 @@
+dependencies:
+  epd_driver:
+    version: 221f068d781ef0e6df7db3cd7cf9bca4b83233e9
+    path: src/epd_driver
+    git: https://github.com/vroland/epdiy.git
+  espressif/libpng: "*"
+  igrr/nvs-dotenv: "^1.0.0"
