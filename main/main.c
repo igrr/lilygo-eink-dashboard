@@ -67,15 +67,31 @@ end:
 
 static esp_err_t set_headers(void *user_data, esp_http_client_handle_t http_client)
 {
-    const char *client_id = getenv("CLIENT_ID");
-    ESP_RETURN_ON_FALSE(client_id != NULL, ESP_ERR_NOT_FOUND, TAG, "CLIENT_ID not set in .env");
-    ESP_RETURN_ON_ERROR(esp_http_client_set_header(http_client, "CF-Access-Client-Id", client_id), TAG, "Failed to set header");
+    const char *headers = getenv("HTTP_HEADERS");
+    if (headers == NULL || strlen(headers) == 0) {
+        ESP_LOGI(TAG, "HTTP_HEADERS not set in .env");
+        return ESP_OK;
+    }
+    esp_err_t ret = ESP_OK;
 
-    const char *client_secret = getenv("CLIENT_SECRET");
-    ESP_RETURN_ON_FALSE(client_secret != NULL, ESP_ERR_NOT_FOUND, TAG, "CLIENT_SECRET not set in .env");
-    ESP_RETURN_ON_ERROR(esp_http_client_set_header(http_client, "CF-Access-Client-Secret", client_secret), TAG, "Failed to set header");
+    // HTTP_HEADERS variable has the format "key1=value1;key2=value2"
+    char *headers_copy = strdup(headers);
+    ESP_RETURN_ON_FALSE(headers_copy != NULL, ESP_ERR_NO_MEM, TAG, "Failed to copy headers");
 
-    return ESP_OK;
+    char *pair_token;
+    char *pair_ptr = headers_copy;
+    while ((pair_token = strsep(&pair_ptr, ";")) != NULL) {
+        char *equal_pos = strchr(pair_token, '=');
+        ESP_GOTO_ON_FALSE(equal_pos != NULL, ESP_ERR_INVALID_ARG, out, TAG, "Invalid HTTP_HEADERS variable format, missing = sing");
+        *equal_pos = '\0';
+        const char *key = pair_token;
+        const char *value = equal_pos + 1;
+        ESP_GOTO_ON_ERROR(esp_http_client_set_header(http_client, key, value), out, TAG, "Failed to set header");
+    }
+
+out:
+    free(headers_copy);
+    return ret;
 }
 
 static void power_off(void)

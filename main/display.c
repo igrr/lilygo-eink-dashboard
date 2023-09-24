@@ -20,7 +20,7 @@
 #pragma GCC diagnostic pop
 
 static void init_epd(void);
-static void png_to_gray_4bit(uint8_t *buf, size_t buf_len, uint8_t **output, size_t *output_len);
+static void png_to_gray(uint8_t *buf, size_t buf_len, uint8_t **output, size_t *output_len);
 
 static const char *TAG = "display";
 static EpdiyHighlevelState s_hl;
@@ -38,7 +38,7 @@ esp_err_t app_display_png(const uint8_t *png_data, size_t png_len)
 {
     uint8_t *gray_buf;
     size_t gray_len;
-    png_to_gray_4bit((uint8_t *) png_data, png_len, &gray_buf, &gray_len);
+    png_to_gray((uint8_t *) png_data, png_len, &gray_buf, &gray_len);
     if (gray_buf == NULL) {
         return ESP_ERR_NO_MEM;
     }
@@ -131,7 +131,7 @@ int app_display_vprintf(const char *fmt, va_list args)
     return res;
 }
 
-static void png_to_gray_4bit(uint8_t *buf, size_t buf_len, uint8_t **output, size_t *output_len)
+static void png_to_gray(uint8_t *buf, size_t buf_len, uint8_t **output, size_t *output_len)
 {
     png_image image;
     memset(&image, 0, (sizeof image));
@@ -139,12 +139,15 @@ static void png_to_gray_4bit(uint8_t *buf, size_t buf_len, uint8_t **output, siz
 
     if (png_image_begin_read_from_memory(&image, buf, buf_len)) {
         png_bytep buffer;
-        ESP_LOGI(TAG, "PNG size: %dx%d", image.width, image.height);
         image.format = PNG_FORMAT_GRAY;
-        buffer = malloc(PNG_IMAGE_SIZE(image));
+        int stride = PNG_IMAGE_ROW_STRIDE(image);
+        int buf_size = PNG_IMAGE_SIZE(image);
+
+        ESP_LOGD(TAG, "PNG size: %dx%d buf_size=%d stride=%d", image.width, image.height, buf_size, stride);
+        buffer = malloc(buf_size);
 
         if (buffer != NULL &&
-                png_image_finish_read(&image, NULL, buffer, 0, NULL)) {
+                png_image_finish_read(&image, NULL, buffer, stride, NULL)) {
             *output = buffer;
             *output_len = PNG_IMAGE_SIZE(image);
         } else {
