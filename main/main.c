@@ -28,12 +28,13 @@ void app_main()
     int64_t connect_start = 0;
     int64_t connect_end = 0;
 
-    // Initialize the screen so that we can output logs there
-    app_display_init();
     esp_log_level_set("*", ESP_LOG_WARN);
+    esp_log_level_set("wifi", ESP_LOG_NONE);
+    esp_log_level_set("wifi_init", ESP_LOG_NONE);
+    esp_log_level_set("phy_init", ESP_LOG_NONE);
     esp_log_level_set(TAG, ESP_LOG_INFO);
     esp_log_level_set("connect", ESP_LOG_INFO);
-    esp_log_set_vprintf(app_display_vprintf);
+    app_display_init_log();
 
     // Initialize NVS and networking
     ESP_GOTO_ON_ERROR(esp_netif_init(), end, TAG, "Failed to init netif");
@@ -51,6 +52,9 @@ void app_main()
     connect_start = esp_timer_get_time();
     connect_end = connect_start;
     ESP_GOTO_ON_ERROR(app_wifi_connect_start(), end, TAG, "Failed to start WiFi connection");
+
+    // Initialize the screen
+    app_display_init();
 
     app_stats_t old_stats;
     app_get_stats(&old_stats);

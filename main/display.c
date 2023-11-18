@@ -13,25 +13,37 @@
 #include "epd_board.h"
 #include "app.h"
 
+#ifndef __clang__
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wbidi-chars"
-#include "firasans_12.h"
+#endif // __clang__
 #include "firasans_20.h"
+#ifndef __clang__
 #pragma GCC diagnostic pop
+#endif // __clang__
+
 
 static void init_epd(void);
 static void png_to_gray(uint8_t *buf, size_t buf_len, uint8_t **output, size_t *output_len);
+static int app_display_vprintf(const char *fmt, va_list args);
 
 static const char *TAG = "display";
 static EpdiyHighlevelState s_hl;
 static int s_temperature;
-static int s_fb_log_y = 60;
-static bool s_logging_to_screen;
+static FILE *s_log_file;
+static char *s_log_str;
+static size_t s_log_str_len;
 
 esp_err_t app_display_init(void)
 {
     init_epd();
     return ESP_OK;
+}
+
+void app_display_init_log(void)
+{
+    s_log_file = open_memstream(&s_log_str, &s_log_str_len);
+    esp_log_set_vprintf(app_display_vprintf);
 }
 
 esp_err_t app_display_png(const uint8_t *png_data, size_t png_len)
@@ -54,6 +66,7 @@ esp_err_t app_display_png(const uint8_t *png_data, size_t png_len)
         }
     }
     epd_poweron();
+    epd_clear();
     epd_hl_update_screen(&s_hl, MODE_GC16, s_temperature);
     epd_poweroff();
     free(gray_buf);
@@ -70,15 +83,27 @@ static void init_epd(void)
     epd_init(EPD_LUT_1K);
     s_hl = epd_hl_init(EPD_BUILTIN_WAVEFORM);
     epd_set_rotation(EPD_ROT_LANDSCAPE);
+}
 
-    epd_poweron();
-    epd_clear();
-    s_temperature = epd_ambient_temperature();
+static int app_display_vprintf(const char *fmt, va_list args)
+{
+    // print to console
+    int res = vprintf(fmt, args);
 
+    // print to log file
+    vfprintf(s_log_file, fmt, args);
+
+    return res;
+}
+
+void app_display_show_log(void)
+{
     uint8_t *fb = epd_hl_get_framebuffer(&s_hl);
     int width = epd_rotated_display_width();
     int height = epd_rotated_display_height();
-
+    fflush(s_log_file);
+    epd_poweron();
+    epd_clear();
     epd_hl_set_all_white(&s_hl);
     EpdRect border_rect = {
         .x = 20,
@@ -87,48 +112,29 @@ static void init_epd(void)
         .height = height - 40
     };
     epd_draw_rect(border_rect, 0, fb);
-    epd_hl_update_screen(&s_hl, MODE_GC16, s_temperature);
-    epd_poweroff();
-}
 
-int app_display_vprintf(const char *fmt, va_list args)
-{
-    // print to console
-    int res = vprintf(fmt, args);
-
-    if (s_logging_to_screen) {
-        return res;
+    // Print lines from s_log_str to screen, using strsep
+    char *line = s_log_str;
+    char *next_line = NULL;
+    int last_y = 60;
+    while ((next_line = strsep(&line, "\n")) != NULL) {
+        if (strlen(next_line) == 0) {
+            continue;
+        }
+        int cursor_x = 50;
+        int cursor_y = last_y;
+        epd_write_default(&FiraSans_20,
+                          next_line,
+                          &cursor_x, &cursor_y, fb);
+        last_y = cursor_y;
+        if (cursor_y >= height - 50) {
+            break;
+        }
     }
 
-    s_logging_to_screen = true;
 
-    // print to screen
-    char buf[128];
-    vsnprintf(buf, sizeof(buf), fmt, args);
-
-    uint8_t *fb = epd_hl_get_framebuffer(&s_hl);
-    int height = epd_rotated_display_height();
-    if (s_fb_log_y >= height - 50) {
-        s_fb_log_y = 60;
-        epd_hl_set_all_white(&s_hl);
-    }
-
-    int cursor_x = 50;
-    int cursor_y = s_fb_log_y;
-
-
-    epd_write_default(&FiraSans_20,
-                      buf,
-                      &cursor_x, &cursor_y, fb);
-
-    s_fb_log_y = cursor_y;
-
-    epd_poweron();
     epd_hl_update_screen(&s_hl, MODE_GC16, s_temperature);
     epd_poweroff();
-
-    s_logging_to_screen = false;
-    return res;
 }
 
 static void png_to_gray(uint8_t *buf, size_t buf_len, uint8_t **output, size_t *output_len)

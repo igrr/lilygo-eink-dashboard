@@ -8,7 +8,8 @@ extern "C" {
 #endif
 
 esp_err_t app_display_init(void);
-int app_display_vprintf(const char *format, va_list args);
+void app_display_init_log(void);
+void app_display_show_log(void);
 esp_err_t app_display_png(const uint8_t *png_data, size_t png_len);
 void app_display_poweroff(void);
 
