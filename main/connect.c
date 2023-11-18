@@ -24,26 +24,27 @@ static void event_handler(void *arg, esp_event_base_t event_base,
 static TaskHandle_t s_connecting_task;
 static const char *TAG = "connect";
 static int s_retry_num = 0;
+static esp_event_handler_instance_t s_instance_any_id;
+static esp_event_handler_instance_t s_instance_got_ip;
 
-esp_err_t app_wifi_connect(void)
+
+esp_err_t app_wifi_connect_start(void)
 {
     s_connecting_task = xTaskGetCurrentTaskHandle();
     esp_netif_create_default_wifi_sta();
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
     ESP_ERROR_CHECK(esp_wifi_init(&cfg));
 
-    esp_event_handler_instance_t instance_any_id;
-    esp_event_handler_instance_t instance_got_ip;
     ESP_ERROR_CHECK(esp_event_handler_instance_register(WIFI_EVENT,
                     ESP_EVENT_ANY_ID,
                     &event_handler,
                     NULL,
-                    &instance_any_id));
+                    &s_instance_any_id));
     ESP_ERROR_CHECK(esp_event_handler_instance_register(IP_EVENT,
                     IP_EVENT_STA_GOT_IP,
                     &event_handler,
                     NULL,
-                    &instance_got_ip));
+                    &s_instance_got_ip));
 
     wifi_config_t wifi_config = {
         .sta = {
@@ -64,7 +65,11 @@ esp_err_t app_wifi_connect(void)
     ESP_ERROR_CHECK(esp_wifi_start());
 
     ESP_LOGI(TAG, "Connecting to %s...", wifi_ssid);
+    return ESP_OK;
+}
 
+esp_err_t app_wifi_wait_for_connection(void)
+{
     const char *connect_timeout_str = getenv("CONNECT_TIMEOUT");
     int connect_timeout_sec = 10;
     if (connect_timeout_str != NULL) {
@@ -80,6 +85,14 @@ esp_err_t app_wifi_connect(void)
         return ESP_FAIL;
     }
     return ESP_ERR_TIMEOUT;
+}
+
+void app_wifi_stop()
+{
+    esp_event_handler_instance_unregister(IP_EVENT, IP_EVENT_STA_GOT_IP, s_instance_got_ip);
+    esp_event_handler_instance_unregister(WIFI_EVENT, ESP_EVENT_ANY_ID, s_instance_any_id);
+    esp_wifi_stop();
+    esp_wifi_deinit();
 }
 
 static void event_handler(void *arg, esp_event_base_t event_base,

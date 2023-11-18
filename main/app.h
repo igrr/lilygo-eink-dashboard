@@ -12,7 +12,9 @@ int app_display_vprintf(const char *format, va_list args);
 esp_err_t app_display_png(const uint8_t *png_data, size_t png_len);
 void app_display_poweroff(void);
 
-esp_err_t app_wifi_connect(void);
+esp_err_t app_wifi_connect_start(void);
+esp_err_t app_wifi_wait_for_connection(void);
+void app_wifi_stop();
 
 #ifdef __cplusplus
 }

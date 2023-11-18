@@ -44,8 +44,10 @@ void app_main()
 
     ESP_GOTO_ON_ERROR(nvs_dotenv_load(), end, TAG, "Failed to init nvs-dotenv");
 
-    ESP_GOTO_ON_ERROR(app_wifi_connect(), end, TAG, "Failed to connect to WiFi");
+    ESP_GOTO_ON_ERROR(app_wifi_connect_start(), end, TAG, "Failed to start WiFi connection");
 
+    // Wait for WiFi connection
+    ESP_GOTO_ON_ERROR(app_wifi_wait_for_connection(), end, TAG, "Failed to connect to WiFi");
     // Download and display the PNG
     ESP_LOGI(TAG, "Downloading...");
     char *png_buf;
@@ -57,6 +59,7 @@ void app_main()
     ESP_GOTO_ON_FALSE(png_url != NULL, ESP_ERR_NOT_FOUND, end, TAG, "PNG_URL not set in .env");
     ESP_GOTO_ON_ERROR(download_file(png_url, f, &download_config), end, TAG, "Failed to download file");
     fflush(f);
+    app_wifi_stop();
 
     ESP_LOGI(TAG, "Rendering...");
     app_display_png((const uint8_t *) png_buf, png_len);
