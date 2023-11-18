@@ -81,6 +81,8 @@ void app_main()
     fflush(f);
     app_wifi_stop();
 
+    ESP_GOTO_ON_FALSE(png_len > 0, ESP_ERR_INVALID_SIZE, end, TAG, "PNG file is empty");
+
     ESP_LOGI(TAG, "Rendering...");
     app_display_png((const uint8_t *) png_buf, png_len);
 
