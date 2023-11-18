@@ -16,6 +16,17 @@ esp_err_t app_wifi_connect_start(void);
 esp_err_t app_wifi_wait_for_connection(void);
 void app_wifi_stop();
 
+typedef struct {
+    unsigned success_count;
+    unsigned fail_count;
+    unsigned awake_time_ms;
+    unsigned connecting_time_ms;
+    unsigned display_on_time_ms;
+} app_stats_t;
+
+void app_update_stats(const app_stats_t *stats);
+void app_get_stats(app_stats_t *stats);
+
 #ifdef __cplusplus
 }
 #endif

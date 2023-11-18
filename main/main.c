@@ -14,6 +14,7 @@
 #include "nvs_dotenv.h"
 #include "sdkconfig.h"
 #include "app.h"
+#include "esp_timer.h"
 
 static esp_err_t set_headers(void *user_data, esp_http_client_handle_t client);
 static void power_off(void);
@@ -23,6 +24,9 @@ static const char *TAG = "main";
 void app_main()
 {
     esp_err_t ret;
+    int64_t end;
+    int64_t connect_start = 0;
+    int64_t connect_end = 0;
 
     // Initialize the screen so that we can output logs there
     app_display_init();
@@ -44,10 +48,22 @@ void app_main()
 
     ESP_GOTO_ON_ERROR(nvs_dotenv_load(), end, TAG, "Failed to init nvs-dotenv");
 
+    connect_start = esp_timer_get_time();
+    connect_end = connect_start;
     ESP_GOTO_ON_ERROR(app_wifi_connect_start(), end, TAG, "Failed to start WiFi connection");
+
+    app_stats_t old_stats;
+    app_get_stats(&old_stats);
+    ESP_LOGI(TAG, "S: %d F: %d Act: %ds Conn: %ds",
+             old_stats.success_count,
+             old_stats.fail_count,
+             old_stats.awake_time_ms / 1000,
+             old_stats.connecting_time_ms / 1000);
 
     // Wait for WiFi connection
     ESP_GOTO_ON_ERROR(app_wifi_wait_for_connection(), end, TAG, "Failed to connect to WiFi");
+    connect_end = esp_timer_get_time();
+
     // Download and display the PNG
     ESP_LOGI(TAG, "Downloading...");
     char *png_buf;
@@ -65,6 +81,25 @@ void app_main()
     app_display_png((const uint8_t *) png_buf, png_len);
 
 end:
+    end = esp_timer_get_time();
+    app_stats_t stats = {
+        .success_count = ret == ESP_OK,
+        .fail_count = ret != ESP_OK,
+        .connecting_time_ms = (connect_end - connect_start) / 1000,
+        .awake_time_ms = end / 1000,
+
+    };
+    ESP_LOGI(TAG, "S%d/F%d A%ds C%ds D%ds\n",
+             stats.success_count,
+             stats.fail_count,
+             stats.awake_time_ms / 1000,
+             stats.connecting_time_ms / 1000,
+             stats.display_on_time_ms / 1000);
+    app_update_stats(&stats);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Error: %s", esp_err_to_name(ret));
+        app_display_show_log();
+    }
     power_off();
 }
 
