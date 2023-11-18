@@ -86,19 +86,20 @@ esp_err_t download_file(const char *url, FILE *f_out, const download_file_config
     int64_t start = esp_timer_get_time();
     ret = esp_http_client_perform(client);
     int64_t end = esp_timer_get_time();
+
+    int http_status = esp_http_client_get_status_code(client);
+    bool http_status_ok = http_status >= 200 && http_status < 300;
+
+    if (!http_status_ok) {
+        ESP_LOGE(TAG, "HTTP result: %s, HTTP Status = %d", esp_err_to_name(ret), http_status);
+        ret = ESP_FAIL;
+    }
     if (ret == ESP_OK) {
-        ESP_LOGI(TAG, "HTTP Status = %d, content_length = %"PRIu64,
-                 esp_http_client_get_status_code(client),
-                 esp_http_client_get_content_length(client));
-        ESP_LOGI(TAG, "Time taken: %d ms Speed: %.2f kB/sec", (int) (end - start) / 1000, (args.content_length / 1024.0f) / ((end - start) / 1000000.0f));
+        ESP_LOGI(TAG, "Size: %u Time taken: %d ms Speed: %.2f kB/sec", args.content_length, (int) (end - start) / 1000, (args.content_length / 1024.0f) / ((end - start) / 1000000.0f));
         ESP_LOGI(TAG, "Download task spent %d ms blocked on writing to ringbuffer", (int) args.download_waiting_for_ringbuf_us / 1000);
         ESP_LOGI(TAG, "File write task spent %d ms blocked on writing to SD card", (int) args.write_waiting_for_sdcard_us / 1000);
-    } else {
-        ESP_LOGE(TAG, "HTTP request failed: %s", esp_err_to_name(ret));
+        xSemaphoreTake(args.done, portMAX_DELAY);
     }
-
-    xSemaphoreTake(args.done, portMAX_DELAY);
-
 out:
     if (client != NULL) {
         esp_http_client_cleanup(client);
